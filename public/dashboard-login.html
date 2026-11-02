@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unlock dashboard · Siege of the Stream</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+    <script type="module" src="/dashboard-login.js"></script>
+  </head>
+  <body>
+    <main class="login-main">
+      <a class="brand" href="/dashboard"
+        ><span class="crest" aria-hidden="true">⚔</span
+        ><span>SIEGE OF<br />THE STREAM</span></a
+      >
+      <section class="panel login-panel">
+        <p class="eyebrow">BROADCASTER ACCESS</p>
+        <h1>Unlock your<br />command post.</h1>
+        <p>
+          Enter the <code>DASHBOARD_TOKEN</code> printed in the server terminal
+          to control this battle.
+        </p>
+        <form id="login-form" method="post" action="/api/dashboard/login">
+          <label for="dashboard-token">Dashboard token</label>
+          <input
+            id="dashboard-token"
+            type="password"
+            minlength="32"
+            maxlength="256"
+            autocomplete="off"
+            spellcheck="false"
+            required
+            autofocus
+          />
+          <button id="login-submit" class="primary" type="submit">
+            Unlock dashboard <span>→</span>
+          </button>
+        </form>
+        <p id="login-message" role="status" aria-live="polite">
+          The OBS overlay stays available while the dashboard is locked.
+        </p>
+        <a href="/overlay" class="login-overlay">Open overlay ↗</a>
+      </section>
+    </main>
+  </body>
+</html>

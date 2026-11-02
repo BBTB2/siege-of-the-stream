@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createBattleServer } from "./app.js";
+import { loadDashboardToken } from "./dashboard-auth.js";
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
@@ -7,7 +8,13 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
 const mode = process.env.MOCK_MODE ?? "true";
 if (mode !== "true" && mode !== "false")
   throw new Error("MOCK_MODE must be true or false.");
+const dashboardToken = loadDashboardToken(
+  ".dashboard-token",
+  process.env.DASHBOARD_TOKEN,
+);
 const battle = createBattleServer({
+  dashboardToken,
+  leaderboardPath: "data/leaderboard.json",
   mockMode: mode === "true",
   twitch: {
     clientId: process.env.TWITCH_CLIENT_ID,
@@ -24,7 +31,7 @@ battle.server.on("error", (error) => {
 });
 battle.server.listen(port, "127.0.0.1", () => {
   process.stdout.write(
-    `Siege of the Stream: http://localhost:${port}/dashboard\nOBS browser source: http://localhost:${port}/overlay (1920×1080)\n`,
+    `DASHBOARD_TOKEN=${dashboardToken}\nKeep this token private; enter it on the dashboard unlock screen.\nSiege of the Stream: http://localhost:${port}/dashboard\nOBS browser source: http://localhost:${port}/overlay (1920×1080)\n`,
   );
   battle.startTwitch();
 });

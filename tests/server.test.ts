@@ -4,9 +4,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { createBattleServer } from "../src/app.js";
 
+const dashboardToken = "test-dashboard-token-" + "a".repeat(32);
 const running: ReturnType<typeof createBattleServer>[] = [];
 async function launch(mockMode = true) {
-  const app = createBattleServer({ mockMode });
+  const app = createBattleServer({ mockMode, dashboardToken });
   running.push(app);
   app.server.listen(0, "127.0.0.1");
   await once(app.server, "listening");
@@ -14,7 +15,11 @@ async function launch(mockMode = true) {
   const post = (path: string, body: unknown = {}, origin = base) =>
     fetch(`${base}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Origin: origin },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+        Authorization: `Bearer ${dashboardToken}`,
+      },
       body: JSON.stringify(body),
     });
   return { base, post };
@@ -61,7 +66,11 @@ describe("HTTP and WebSocket battle boundary", () => {
       notification("attack", "!attack"),
     );
     expect((await replay.json()).state.boss.hp).toBe(2975);
-    const status = await (await fetch(`${base}/api/twitch`)).json();
+    const status = await (
+      await fetch(`${base}/api/twitch`, {
+        headers: { Authorization: `Bearer ${dashboardToken}` },
+      })
+    ).json();
     expect(status).toMatchObject({ mode: "mock", phase: "idle" });
     expect(JSON.stringify(status)).not.toMatch(
       /access_token|refresh_token|device_code/,

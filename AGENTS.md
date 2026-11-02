@@ -12,6 +12,9 @@ and Twitch CLI mock events. Credentials stay outside Git and browser state.
 - `src/game/tick.ts`: deterministic fixed 100ms steps and NPC/boss behavior.
 - `src/app.ts`: Express/WebSocket factory, sole runtime state owner, 10Hz clock.
 - `src/demo.ts`: isolated deterministic 60s showcase (45s battle + 15s results).
+- `src/dashboard-auth.ts`: private persistent token and opaque dashboard sessions.
+- `src/chat-rate-limit.ts`: bounded 5/user/s and 100 global/s chat ingress budgets.
+- `src/leaderboard-store.ts`: validated viewer totals, serialized atomic JSON writes.
 - `src/server.ts`: `.env`, localhost listener, startup and shutdown.
 - `src/validation.ts`: untrusted HTTP payload validation.
 - `src/twitch/auth*.ts`, `token-store.ts`: device flow, validation, refresh, local storage.
@@ -71,7 +74,9 @@ WebSocket backpressure safeguards. Validate all external inputs, never expose
 Twitch adapters normalize and deduplicate events before dispatching through the
 same state owner. Live auth must be the configured broadcaster. Never print access
 or refresh tokens or device secrets, or put them in WebSocket/dashboard state.
-Only the user-facing verification URL and user code may be displayed. Preserve
+Only the user-facing Twitch verification URL and user code may be displayed.
+The separate DASHBOARD_TOKEN is printed to the local startup console as requested;
+never expose it through APIs, browser state, URLs, or request logs. Preserve
 `.env`, `.tokens.json`, and `.tokens.json.*` ignore rules and 0600 token permissions.
 
 Fresh socket sessions resubscribe; a Twitch-directed handoff waits for new welcome
@@ -79,3 +84,20 @@ before closing the old socket and keeps existing subscriptions. Guard async
 responses by lifecycle generation and subscription session/attempt; late responses
 must not overwrite a newer session or authorization error. Keep mocks token-free.
 CLI 1.1.24 lacks chat events; the mock chat script supplies synthetic envelopes.
+
+Dashboard/control requests require a Bearer token or an opaque HttpOnly strict
+session cookie. Keep `/api/dashboard/login` behind the Host/Origin/JSON checks,
+limit login attempts, and never serve dashboard HTML through the static asset
+fallback. OBS `/overlay`, read-only `/ws`, and `/api/state` stay public. Keep login
+forms safe when JS fails (POST fallback, no token field name or URL parameters).
+`.dashboard-token` is generated only by startup, reused with 0600 permissions and
+gitignored; never edit `.env` to write it. Mock chat reads the same local token.
+
+Apply effects toggles and chat rate limits in the single dispatch path for live
+Twitch and mock inputs. Keep 3s engine action cooldowns and immediate join/action.
+Toggle settings are per-process and do not unsubscribe EventSub or affect demo.
+Observe every fixed tick for playing-to-results transitions: add one completed
+round's viewer stats to the all-time store, including stop/timeout, never NPCs or
+demo. Default runtime path is `data/leaderboard.json`; the app factory defaults to
+in-memory storage for tests. Flush saves on shutdown/reset and surface disk errors.
+Reset clears saved totals only; an active round still counts on completion.

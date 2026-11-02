@@ -62,8 +62,9 @@ machine; the server binds to loopback only.
    If it is already running on port 3000, use that instance. Configuration changes
    take effect on a later restart that you control.
 
-4. Open **http://localhost:3000/dashboard**. Follow the verification URL and enter
-   the device code shown there or in the terminal. Authorize **as the configured
+4. Open **http://localhost:3000/dashboard** and unlock it with the
+   `DASHBOARD_TOKEN` printed in the server terminal. Then follow the Twitch
+   verification URL and enter the device code shown there or in the terminal. Authorize **as the configured
    broadcaster** and wait for the EventSub subscriptions to show as enabled.
 5. In OBS, add a **Browser Source** pointing to
    **http://localhost:3000/overlay**, with width **1920**, height **1080**, and
@@ -79,6 +80,40 @@ or open [the scripted demo](#one-minute-demo) on an already running instance.
 For a compiled run, use `npm run build` then `npm start` instead of the dev
 command. The `public/` directory must stay beside `dist/`. Game state is in
 memory and resets when the server restarts.
+
+## Broadcaster dashboard and access
+
+On the first startup, the app generates a random 256-bit `DASHBOARD_TOKEN`, saves
+it in the gitignored `.dashboard-token` file with owner-only permissions, and
+prints it in the terminal. It reuses that file on later starts. Enter the token
+on `/dashboard`; it stays out of URLs and browser storage. The browser receives
+an opaque HttpOnly, SameSite=Strict session cookie lasting 12 hours. **Lock
+dashboard** revokes that browser session. Login attempts are limited to 10/minute.
+An optional `DASHBOARD_TOKEN` environment variable overrides the local file
+(32–256 letters, digits, hyphens, or underscores); no `.env` edit is necessary.
+
+Dashboard HTML and control/status APIs require authentication, including mock
+ingestion, Twitch connection status, and Twitch reconnect. Scripts can send
+`Authorization: Bearer <token>`. The overlay, demo, `/api/state`, and read-only
+`/ws` remain accessible without credentials so OBS needs no token in its URL.
+Use your configured `PORT` in all URLs; for example, `PORT=3456` means
+`http://localhost:3456/dashboard` and `http://localhost:3456/overlay`.
+
+The dashboard shows authorization, EventSub connection state, and enabled
+subscriptions separately. It preserves boss selection, round length, start/stop,
+rage, and mock controls, and adds independent follow/subscription/gift/cheer/raid
+effect switches. Switches affect new events immediately; existing shields and
+knights remain in play. They do not unsubscribe from Twitch and default to enabled
+at each startup. The isolated scripted demo always showcases every effect.
+
+All-time viewer totals are saved after each completed round to
+`data/leaderboard.json`, using serialized atomic writes. Victory, timeout, and
+manual stop each count once; demo rounds and summoned NPCs do not count. Stable
+Twitch IDs combine damage, heals, and blocks across rounds and restarts. The
+all-time table shows the top 25; resetting it clears saved totals after confirmation
+without changing the current round or its MVP card. An in-progress round still
+counts when it ends. Save failures appear on the dashboard; malformed stored data
+is preserved and rejected on startup rather than silently overwritten.
 
 ## Chat commands
 
@@ -98,7 +133,10 @@ memory and resets when the server restarts.
 | Cheer                | Fireball dealing 1 damage per bit                                  |
 | Raid                 | Spawn up to 50 reinforcements attacking for 10 every 3 seconds     |
 
-Attack, defend, and heal share a **3-second per-viewer cooldown**. Knocked-out
+Attack, defend, and heal share a **3-second per-viewer cooldown**. The input
+boundary also allows at most **5 commands per viewer per second** and **100
+commands globally per second**, including `!join`, with bounded sender tracking.
+Commands other than `!join` are ignored until that viewer joins the current round. Knocked-out
 knights can return with `!heal`. Bosses strike every 5 seconds for 10/20/30 HP
 according to phase. At two-thirds and one-third HP they enter phases two and
 three. Phase three unleashes repeating rage attacks: **two seconds to defend**
@@ -203,7 +241,9 @@ Once the dashboard shows the mock connection, run this in another terminal:
 npm run mock:chat
 ```
 
-`mock:chat` joins 30 synthetic viewers, starts a round if idle, and sends random
+`mock:chat` reads `.dashboard-token` (or the optional `DASHBOARD_TOKEN` override)
+and authenticates its requests automatically. Run it from the project root after
+the app has created its token file. It joins 30 synthetic viewers, starts a round if idle, and sends random
 commands for up to 60 seconds (or until the round ends). Override with
 `MOCK_CHAT_SECONDS=120 npm run mock:chat`. It refuses live mode and sends only to
 the localhost game server. Synthetic chat envelopes use the same parser, mapper,
@@ -272,6 +312,9 @@ siege-of-the-stream/
 │   ├── game/               # Pure state, commands, combat, fixed ticks
 │   ├── twitch/             # Device auth, token store, Helix, EventSub, mapping
 │   ├── app.ts              # HTTP controls and WebSocket state owner
+│   ├── dashboard-auth.ts   # Token file, login sessions, control authentication
+│   ├── chat-rate-limit.ts  # Per-viewer and global command budgets
+│   ├── leaderboard-store.ts # Atomic all-time viewer totals
 │   ├── demo.ts             # Scripted battle isolated from the live round
 │   ├── server.ts           # Config and localhost startup
 │   └── validation.ts       # HTTP input validation
@@ -311,6 +354,11 @@ This project was built iteratively in this Codex conversation:
    tighten local-data ignore rules, scan Git history and submission files for
    secrets, and rerun formatting/syntax, type, and test checks.
 
+6. **Broadcaster polish (Prompt 4):** protect the dashboard with a generated local
+   token, show connection health, add event switches and saved viewer totals,
+   enforce chat budgets, and test authentication/persistence/rate limiting. Verify
+   browser controls on an isolated test instance while leaving the live server alone.
+
 Codex handled implementation, regression tests, documentation, and browser-based
 visual inspection. Broadcaster consent and the final OBS/video capture remain
 human steps. Live Twitch authorization and actual OBS 60fps are not yet verified;
@@ -340,7 +388,8 @@ See [AGENTS.md](AGENTS.md) for architecture and development conventions.
 
 ## Local data and license
 
-`.env` variants (except `.env.example`), `.tokens.json` and its temporary files,
+`.env` variants (except `.env.example`), `.tokens.json`, `.dashboard-token`, and
+their temporary files,
 `data/`, `captures/`, `logs/`, log files, and local database files are gitignored.
 Keep runtime captures in those directories. Sanitized test fixtures remain
 versioned so tests are reproducible; do not replace them with private viewer data

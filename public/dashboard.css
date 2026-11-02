@@ -400,3 +400,156 @@ footer {
     letter-spacing: 0.5px;
   }
 }
+
+.connection-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.connection-grid > div {
+  padding: 14px;
+  background: #111a1c;
+  border: 1px solid var(--edge);
+}
+.connection-grid span,
+.connection-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.connection-grid span {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.connection-grid strong {
+  font-size: 13px;
+}
+.healthy {
+  color: var(--mint);
+}
+.warning {
+  color: #ffc29f;
+}
+#twitch-subscriptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
+#twitch-subscriptions li {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--edge);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#twitch-subscriptions small {
+  width: 100%;
+  color: var(--muted);
+}
+#twitch-device {
+  border-left: 3px solid var(--mint);
+  padding: 0 18px;
+  margin: 20px 0;
+}
+#twitch-device a {
+  color: var(--mint);
+}
+#twitch-code {
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: var(--ink);
+}
+.effect-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.effect-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--edge);
+  background: #111a1c;
+  cursor: pointer;
+}
+.effect-toggle:has(input:checked) {
+  border-color: #54745e;
+}
+.effect-toggle input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--mint);
+}
+.effect-toggle span {
+  margin: 0;
+}
+.effect-toggle strong,
+.effect-toggle small {
+  display: block;
+}
+.effect-toggle strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.effect-toggle small {
+  margin-top: 3px;
+  font-size: 11px;
+}
+.leaderboard-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.leaderboard-heading p {
+  margin-bottom: 0;
+}
+#settings-message {
+  font-size: 12px;
+  min-height: 18px;
+}
+.login-main {
+  max-width: 620px;
+  padding-top: 8vh;
+}
+.login-panel {
+  margin-top: 32px;
+}
+.login-panel h1 {
+  font-size: clamp(30px, 5vw, 42px);
+}
+.login-overlay {
+  color: var(--mint);
+  font-size: 13px;
+}
+@media (max-width: 800px) {
+  .connection-grid,
+  .effect-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #twitch-subscriptions {
+    grid-template-columns: 1fr;
+  }
+  .leaderboard-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+@media (max-width: 480px) {
+  .connection-grid,
+  .effect-grid {
+    grid-template-columns: 1fr;
+  }
+  .brand {
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+}

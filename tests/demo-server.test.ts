@@ -4,13 +4,14 @@ import { afterEach, expect, it } from "vitest";
 import WebSocket from "ws";
 import { createBattleServer } from "../src/app.js";
 
+const dashboardToken = "test-dashboard-token-" + "a".repeat(32);
 const running: ReturnType<typeof createBattleServer>[] = [];
 afterEach(async () => {
   await Promise.all(running.splice(0).map((app) => app.close()));
 });
 
 it("serves an isolated read-only demo stream without starting a live battle or Twitch", async () => {
-  const app = createBattleServer({ mockMode: false });
+  const app = createBattleServer({ mockMode: false, dashboardToken });
   running.push(app);
   app.server.listen(0, "127.0.0.1");
   await once(app.server, "listening");
@@ -39,7 +40,15 @@ it("serves an isolated read-only demo stream without starting a live battle or T
   expect((await (await fetch(`${base}/api/state`)).json()).state.status).toBe(
     "idle",
   );
-  expect((await (await fetch(`${base}/api/twitch`)).json()).phase).toBe("idle");
+  expect(
+    (
+      await (
+        await fetch(`${base}/api/twitch`, {
+          headers: { Authorization: `Bearer ${dashboardToken}` },
+        })
+      ).json()
+    ).phase,
+  ).toBe("idle");
   demo.send(JSON.stringify({ action: "!attack" }));
   const [code] = await once(demo, "close");
   expect(code).toBe(1008);

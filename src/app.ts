@@ -1,5 +1,7 @@
 import express, { type ErrorRequestHandler } from "express";
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
+import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { WebSocket, WebSocketServer } from "ws";
@@ -20,10 +22,15 @@ import {
   eventInput,
   InputError,
   roundOptions,
+  effectSetting,
 } from "./validation.js";
 import { TwitchService, type TwitchConfig } from "./twitch/service.js";
 import type { GameInput } from "./twitch/mapping.js";
 import { createDemo, tickDemo, type DemoState } from "./demo.js";
+
+import { createDashboardAuth } from "./dashboard-auth.js";
+import { createChatRateLimiter } from "./chat-rate-limit.js";
+import { LeaderboardStore } from "./leaderboard-store.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const allowedHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -43,8 +50,12 @@ export function createBattleServer({
   mockMode,
   twitch: twitchConfig,
   log,
+  dashboardToken = randomBytes(32).toString("hex"),
+  leaderboardPath,
 }: {
   mockMode: boolean;
+  dashboardToken?: string;
+  leaderboardPath?: string;
   twitch?: TwitchConfig;
   log?: (line: string) => void;
 }) {
@@ -53,9 +64,39 @@ export function createBattleServer({
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   const demos = new Map<WebSocket, DemoState>();
   let state = createGame();
+  const auth = createDashboardAuth(dashboardToken);
+  const chatLimiter = createChatRateLimiter();
+  const leaderboard = new LeaderboardStore(leaderboardPath);
+  let effects = {
+    follow: true,
+    subscription: true,
+    gift: true,
+    cheer: true,
+    raid: true,
+  };
+  const dashboard = () => ({
+    effects,
+    leaderboard: leaderboard.get(),
+    persistenceError: leaderboard.getError(),
+  });
+  function replaceState(next: GameState) {
+    if (state.status === "playing" && next.status === "results")
+      leaderboard.addRound(next.leaderboard);
+    state = next;
+  }
   function dispatch(input: GameInput): string {
+    if (input.kind === "command") {
+      const allowance = chatLimiter.accept(input.userId, performance.now());
+      if (allowance !== "allowed") return `ignored:${allowance}`;
+      if (
+        input.action !== "!join" &&
+        !state.knights.some((k) => k.id === `viewer:${input.userId}`)
+      )
+        return "ignored:not_joined";
+    } else if (!effects[input.event.type])
+      return `ignored:effect_disabled:${input.event.type}`;
     const before = state;
-    state =
+    replaceState(
       input.kind === "command"
         ? command(
             state,
@@ -64,7 +105,8 @@ export function createBattleServer({
             input.action,
             input.color,
           )
-        : twitchEvent(state, input.event);
+        : twitchEvent(state, input.event),
+    );
     if (before === state)
       return `ignored:${before.status !== "playing" ? "round_inactive" : "cooldown_unjoined_or_knocked_out"}`;
     const damage = before.boss.hp - state.boss.hp;
@@ -87,6 +129,7 @@ export function createBattleServer({
       return;
     }
     res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader(
       "Content-Security-Policy",
       "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws:; frame-ancestors 'self'; base-uri 'none'",
@@ -120,6 +163,24 @@ export function createBattleServer({
   app.get("/api/state", (_req, res) =>
     res.json({ state, bosses: BOSSES, mockMode }),
   );
+  app.post("/api/dashboard/login", auth.login);
+  app.use("/api", auth.requireAuth);
+  app.post("/api/dashboard/logout", auth.logout);
+  app.get("/api/dashboard", (_req, res) => res.json(dashboard()));
+  app.post("/api/effects", (req, res) => {
+    const setting = effectSetting(req.body);
+    effects = { ...effects, [setting.type]: setting.enabled };
+    res.json(dashboard());
+  });
+  app.post("/api/leaderboard/reset", async (_req, res, next) => {
+    leaderboard.reset();
+    try {
+      await leaderboard.flush();
+      res.json(dashboard());
+    } catch (error) {
+      next(error);
+    }
+  });
   app.get("/api/twitch", (_req, res) => res.json(twitch.getStatus()));
   app.post("/api/twitch/connect", (_req, res) => {
     twitch.start();
@@ -133,12 +194,12 @@ export function createBattleServer({
         .json({ error: "Wait for the current round and results to finish." });
       return;
     }
-    state = startRound(state, options);
+    replaceState(startRound(state, options));
     res.json({ state });
   });
   const control = (path: string, transition: (s: GameState) => GameState) => {
     app.post(path, (_req, res) => {
-      state = transition(state);
+      replaceState(transition(state));
       res.json({ state });
     });
   };
@@ -155,13 +216,13 @@ export function createBattleServer({
     const input = chatInput(req.body);
     const effect = dispatch({ kind: "command", ...input });
     log?.(JSON.stringify({ twitch: "mock.chat", effect }));
-    res.json({ state });
+    res.json({ state, effect });
   });
   app.post("/api/mock/event", (req, res) => {
     const event = eventInput(req.body);
     const effect = dispatch({ kind: "event", event });
     log?.(JSON.stringify({ twitch: `mock.${event.type}`, effect }));
-    res.json({ state });
+    res.json({ state, effect });
   });
   app.post("/api/mock/notification", (req, res) => {
     if (!req.body || typeof req.body !== "object" || Array.isArray(req.body))
@@ -170,13 +231,25 @@ export function createBattleServer({
     res.json({ state });
   });
   app.get("/", (_req, res) => res.redirect("/dashboard"));
-  app.get("/overlay", (_req, res) =>
+  app.get(["/overlay", "/overlay.html"], (_req, res) =>
     res.sendFile("overlay.html", { root: publicDir }),
   );
-  app.get("/dashboard", (_req, res) =>
-    res.sendFile("dashboard.html", { root: publicDir }),
-  );
-  app.use(express.static(publicDir, { index: false }));
+  app.get(["/dashboard", "/dashboard.html"], (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const authorized = auth.authenticated(req);
+    res
+      .status(authorized ? 200 : 401)
+      .sendFile(authorized ? "dashboard.html" : "dashboard-login.html", {
+        root: publicDir,
+      });
+  });
+  // HTML is served only by the explicit routes above: encoded/static aliases
+  // must never bypass the dashboard authentication gate.
+  const assets = express.static(publicDir, { index: false });
+  app.use((req, res, next) => {
+    if ([".js", ".css"].includes(extname(req.path))) assets(req, res, next);
+    else next();
+  });
   app.use((_req, res) => res.status(404).json({ error: "Not found." }));
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof InputError || error?.type === "entity.parse.failed") {
@@ -227,7 +300,9 @@ export function createBattleServer({
     previous = now;
     const elapsed = Math.floor(remainder / RULES.tickMs) * RULES.tickMs;
     remainder -= elapsed;
-    if (elapsed) state = tick(state, elapsed);
+    // Observe each result transition even after a delayed event-loop tick.
+    for (let step = 0; step < elapsed; step += RULES.tickMs)
+      replaceState(tick(state));
     const payload = JSON.stringify({ type: "state", state });
     for (const client of sockets.clients) {
       if (client.bufferedAmount > 1_000_000) client.terminate();
@@ -255,6 +330,7 @@ export function createBattleServer({
           : resolve(),
       ),
     );
+    await leaderboard.flush();
   }
   return { server, close, startTwitch: () => twitch.start() };
 }

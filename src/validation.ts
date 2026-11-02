@@ -97,3 +97,17 @@ export function eventInput(body: unknown): TwitchEvent {
       throw new InputError("Unknown Twitch event.");
   }
 }
+
+export function effectSetting(body: unknown): {
+  type: TwitchEvent["type"];
+  enabled: boolean;
+} {
+  const data = object(body);
+  if (
+    typeof data.type !== "string" ||
+    !["follow", "subscription", "gift", "cheer", "raid"].includes(data.type) ||
+    typeof data.enabled !== "boolean"
+  )
+    throw new InputError("Choose a known event and a boolean enabled value.");
+  return { type: data.type as TwitchEvent["type"], enabled: data.enabled };
+}

@@ -5,6 +5,8 @@ dist/
 !.env.example
 .tokens.json
 .tokens.json.*
+.dashboard-token
+.dashboard-token.*
 # Local runtime data, event captures, databases, and logs (keep test fixtures).
 data/
 captures/

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const seconds = Number(process.env.MOCK_CHAT_SECONDS ?? 60);
@@ -17,15 +18,28 @@ if (
   );
 }
 const base = `http://127.0.0.1:${port}`;
+let dashboardToken;
+try {
+  dashboardToken =
+    process.env.DASHBOARD_TOKEN ??
+    (await readFile(".dashboard-token", "utf8")).trim();
+} catch {
+  throw new Error(
+    "Start the app once to create its local dashboard token, or supply DASHBOARD_TOKEN.",
+  );
+}
 const broadcasterId = process.env.TWITCH_MOCK_BROADCASTER_ID ?? "1234";
 const controller = new AbortController();
 process.once("SIGINT", () => controller.abort());
 async function request(path, body) {
   const response = await fetch(base + path, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${dashboardToken}`,
+    },
     ...(body
       ? {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }
       : {}),

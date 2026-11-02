@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/dashboard.css" />
     <script type="module" src="/dashboard.js"></script>
     <script type="module" src="/twitch-dashboard.js"></script>
+    <script type="module" src="/dashboard-settings.js"></script>
   </head>
   <body>
     <main>
@@ -16,6 +17,9 @@
           ><span>SIEGE OF<br />THE STREAM</span></a
         >
         <div class="header-right">
+          <button id="dashboard-logout" class="secondary">
+            Lock dashboard
+          </button>
           <span id="connection" role="status">Connecting</span
           ><a
             class="button secondary"
@@ -50,6 +54,24 @@
         <div class="section-title">
           <h2 id="twitch-title">Twitch connection</h2>
           <span id="twitch-status" role="status">Checking…</span>
+        </div>
+        <div class="connection-grid" aria-label="Connection health">
+          <div>
+            <span>Dashboard access</span
+            ><strong id="dashboard-access">Checking session…</strong>
+          </div>
+          <div>
+            <span>Twitch authorization</span
+            ><strong id="twitch-auth">Checking…</strong>
+          </div>
+          <div>
+            <span>EventSub connection</span
+            ><strong id="eventsub-status">Checking…</strong>
+          </div>
+          <div>
+            <span>Active subscriptions</span
+            ><strong id="subscription-count">0 / 6</strong>
+          </div>
         </div>
         <p id="twitch-message">Connecting to the event stream.</p>
         <div id="twitch-device" hidden>
@@ -118,23 +140,74 @@
             /><button id="copy-url" class="secondary">Copy</button>
           </div>
           <div class="source-spec">
-            <span>1920 × 1080</span><span>30 FPS</span><span>Transparent</span>
+            <span>1920 × 1080</span><span>60 FPS</span><span>Transparent</span>
           </div>
           <div class="commands">
             <p><code>!join</code><span>Spawn your knight</span></p>
             <p><code>!attack</code><span>Damage the boss</span></p>
             <p><code>!defend</code><span>Block the next slam</span></p>
-            <p><code>!heal</code><span>Restore an injured ally</span></p>
+            <p>
+              <code>!heal</code><span>Heal an ally or revive yourself</span>
+            </p>
           </div>
           <p class="hint">
-            Actions share a 3-second cooldown. Rage gives your army 4 seconds to
-            defend. Knocked-out knights return next round.
+            Actions share a 3-second cooldown. Rage gives your army 2 seconds to
+            defend. Knocked-out knights can return with !heal.
           </p>
         </section>
       </div>
-      <section class="panel mock-panel" id="mock-panel" hidden>
+      <section class="panel" aria-labelledby="effects-title">
         <div class="section-title">
           <span class="number">03</span>
+          <h2 id="effects-title">Shape the battle</h2>
+        </div>
+        <p>
+          Choose which incoming Twitch events affect the army. Changes apply to
+          new events; existing shields and knights stay in play.
+        </p>
+        <div class="effect-grid">
+          <label class="effect-toggle"
+            ><input type="checkbox" data-effect="follow" disabled /><span
+              ><strong>Follows</strong
+              ><small>10-second shield wall</small></span
+            ></label
+          >
+          <label class="effect-toggle"
+            ><input type="checkbox" data-effect="subscription" disabled /><span
+              ><strong>Subscriptions</strong
+              ><small>Golden champion knight</small></span
+            ></label
+          >
+          <label class="effect-toggle"
+            ><input type="checkbox" data-effect="gift" disabled /><span
+              ><strong>Gift subscriptions</strong
+              ><small>Champion per gift notification</small></span
+            ></label
+          >
+          <label class="effect-toggle"
+            ><input type="checkbox" data-effect="cheer" disabled /><span
+              ><strong>Cheers</strong
+              ><small>Fireball powered by bits</small></span
+            ></label
+          >
+          <label class="effect-toggle"
+            ><input type="checkbox" data-effect="raid" disabled /><span
+              ><strong>Raids</strong
+              ><small>Up to 50 reinforcements</small></span
+            ></label
+          >
+        </div>
+        <p class="hint">
+          These switches control game effects, not your Twitch subscriptions.
+          All effects start enabled when the server starts.
+        </p>
+        <p id="settings-message" role="status" aria-live="polite">
+          Loading event settings…
+        </p>
+      </section>
+      <section class="panel mock-panel" id="mock-panel" hidden>
+        <div class="section-title">
+          <span class="number">04</span>
           <h2>Test the battle</h2>
           <span class="badge">MOCK MODE</span>
         </div>
@@ -214,6 +287,43 @@
             <tbody id="leaders"></tbody>
           </table>
         </div>
+      </section>
+      <section class="panel" aria-labelledby="alltime-title">
+        <div class="section-title leaderboard-heading">
+          <div>
+            <h2 id="alltime-title">All-time hall of heroes</h2>
+            <p class="hint">
+              Viewer totals from completed rounds, saved on this machine.
+              Champions and raid reinforcements are excluded.
+            </p>
+          </div>
+          <button id="reset-leaderboard" class="danger" disabled>
+            Reset leaderboard
+          </button>
+        </div>
+        <p id="leaderboard-empty" class="hint">
+          Finish a round to record your first heroes.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Viewer</th>
+                <th>Damage</th>
+                <th>Heals</th>
+                <th>Blocks</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="alltime-leaders"></tbody>
+          </table>
+        </div>
+        <p class="hint">
+          Score = damage + healing + 25 × blocks. Showing the top 25 viewers.
+          Reset clears saved totals; the current round will still count when it
+          ends.
+        </p>
+        <p id="persistence-error" class="warning" role="alert" hidden></p>
       </section>
       <p id="message" role="status" aria-live="polite">Ready when you are.</p>
       <footer>

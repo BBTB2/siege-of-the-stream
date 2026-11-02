@@ -1,4 +1,5 @@
 import { connectState } from "./stream.js";
+import { dashboardFetch } from "./dashboard-api.js";
 
 const $ = (selector) => document.querySelector(selector);
 let current;
@@ -86,7 +87,7 @@ async function post(path, body, success) {
   pending = true;
   controls();
   try {
-    const response = await fetch(path, {
+    const response = await dashboardFetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -95,7 +96,11 @@ async function post(path, body, success) {
     if (!response.ok)
       throw new Error(result.error ?? "The action could not be completed.");
     if (result.state) render(result.state);
-    message(success);
+    message(
+      result.effect?.startsWith("ignored:")
+        ? `No game change: ${result.effect.slice(8).replaceAll("_", " ")}.`
+        : success,
+    );
   } catch (error) {
     message(error.message ?? "Cannot reach the game server.", true);
   } finally {
@@ -127,7 +132,7 @@ $("#rage").addEventListener(
     void post(
       "/api/rage",
       {},
-      "Rage triggered. Your army has 4 seconds to !defend.",
+      "Rage triggered. Your army has 2 seconds to !defend.",
     ),
 );
 $("#copy-url").addEventListener("click", async () => {
@@ -151,7 +156,7 @@ document.querySelectorAll("[data-command]").forEach((button) => {
       void post(
         "/api/mock/command",
         { ...who, action: button.dataset.command },
-        `${who.username}: ${button.dataset.command} sent. Actions apply only to living, joined knights off cooldown.`,
+        `${who.username}: ${button.dataset.command} sent. Join first; actions respect the cooldown. !heal can revive a knocked-out knight.`,
       );
     } catch (error) {
       message(error.message, true);
@@ -165,11 +170,11 @@ document.querySelectorAll("[data-event]").forEach((button) => {
       const type = button.dataset.event;
       const event =
         type === "cheer"
-          ? { type, bits: Number($("#bits").value), userId }
+          ? { type, bits: Number($("#bits").value), userId, username }
           : type === "raid"
             ? { type, viewers: Number($("#viewers").value), username }
             : type === "follow"
-              ? { type }
+              ? { type, username }
               : { type, username };
       void post("/api/mock/event", event, `${type} event delivered.`);
     } catch (error) {
