@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Siege of the Stream · Command post</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+    <script type="module" src="/dashboard.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <a class="brand" href="/dashboard"
+          ><span class="crest" aria-hidden="true">⚔</span
+          ><span>SIEGE OF<br />THE STREAM</span></a
+        >
+        <div class="header-right">
+          <span id="connection" role="status">Connecting</span
+          ><a
+            class="button secondary"
+            href="/overlay"
+            target="_blank"
+            rel="noopener"
+            >Open overlay ↗</a
+          >
+        </div>
+      </header>
+      <div class="intro">
+        <p class="eyebrow">BROADCASTER COMMAND POST</p>
+        <h1>Your chat. Your army.<br /><span>One very angry boss.</span></h1>
+        <p>Set the stage, rally your viewers, and let the siege begin.</p>
+      </div>
+      <div class="metrics" aria-label="Live battle statistics">
+        <article>
+          <span>ROUND STATUS</span><strong id="round-status">Waiting</strong>
+        </article>
+        <article>
+          <span>BOSS HEALTH</span><strong id="boss-health">—</strong>
+          <div class="meter"><i id="hp-bar"></i></div>
+        </article>
+        <article>
+          <span>KNIGHTS STANDING</span><strong id="knight-count">0</strong>
+        </article>
+        <article>
+          <span>TIME REMAINING</span><strong id="time-left">—</strong>
+        </article>
+      </div>
+      <div class="columns">
+        <section class="panel">
+          <div class="section-title">
+            <span class="number">01</span>
+            <h2>Prepare the siege</h2>
+          </div>
+          <form id="round-form">
+            <label for="boss">Choose your boss</label
+            ><select id="boss" name="boss" required></select>
+            <label for="duration">Round length <span>seconds</span></label
+            ><input
+              id="duration"
+              name="duration"
+              type="number"
+              min="1"
+              max="3600"
+              step="1"
+              value="180"
+              required
+            />
+            <p class="hint">
+              Three phases. Rage begins in the final third of boss health.
+            </p>
+            <button id="start" type="submit" class="primary" disabled>
+              Start round <span>→</span>
+            </button>
+          </form>
+          <div class="battle-actions">
+            <button id="rage" class="danger" disabled>Trigger rage</button
+            ><button id="stop" class="secondary" disabled>End round</button>
+          </div>
+          <p id="round-hint" class="hint">Waiting for the game server.</p>
+        </section>
+        <section class="panel">
+          <div class="section-title">
+            <span class="number">02</span>
+            <h2>Bring it to your stream</h2>
+          </div>
+          <p>Add a <strong>Browser Source</strong> in OBS with this URL:</p>
+          <div class="copy-row">
+            <input
+              id="overlay-url"
+              aria-label="OBS overlay URL"
+              readonly
+            /><button id="copy-url" class="secondary">Copy</button>
+          </div>
+          <div class="source-spec">
+            <span>1920 × 1080</span><span>30 FPS</span><span>Transparent</span>
+          </div>
+          <div class="commands">
+            <p><code>!join</code><span>Spawn your knight</span></p>
+            <p><code>!attack</code><span>Damage the boss</span></p>
+            <p><code>!defend</code><span>Block the next slam</span></p>
+            <p><code>!heal</code><span>Restore an injured ally</span></p>
+          </div>
+          <p class="hint">
+            Actions share a 3-second cooldown. Rage gives your army 4 seconds to
+            defend. Knocked-out knights return next round.
+          </p>
+        </section>
+      </div>
+      <section class="panel mock-panel" id="mock-panel" hidden>
+        <div class="section-title">
+          <span class="number">03</span>
+          <h2>Test the battle</h2>
+          <span class="badge">MOCK MODE</span>
+        </div>
+        <p>
+          Try chat commands and Twitch events before going live. Start a round
+          first.
+        </p>
+        <div class="mock-grid">
+          <div>
+            <label for="username">Viewer username</label
+            ><input
+              id="username"
+              maxlength="25"
+              value="stream_knight"
+              autocomplete="off"
+            />
+            <div class="command-buttons">
+              <button data-command="!join">!join</button
+              ><button data-command="!attack">!attack</button
+              ><button data-command="!defend">!defend</button
+              ><button data-command="!heal">!heal</button>
+            </div>
+            <p class="hint">
+              Change the name to control another viewer. Commands respect game
+              cooldowns.
+            </p>
+          </div>
+          <div>
+            <label for="bits">Cheer amount <span>bits</span></label>
+            <div class="input-action">
+              <input
+                id="bits"
+                type="number"
+                min="1"
+                max="1000000"
+                value="100"
+              /><button data-event="cheer">Fireball</button>
+            </div>
+            <label for="viewers">Raid size <span>viewers</span></label>
+            <div class="input-action">
+              <input
+                id="viewers"
+                type="number"
+                min="0"
+                max="1000000"
+                value="10"
+              /><button data-event="raid">Reinforce</button>
+            </div>
+          </div>
+          <div class="event-buttons">
+            <button data-event="follow">
+              Follow <span>10s shield wall</span></button
+            ><button data-event="subscription">
+              Subscription <span>Summon champion</span></button
+            ><button data-event="gift">
+              Gift subscription <span>Summon champion</span>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section class="panel" id="results-panel" hidden>
+        <div class="section-title">
+          <span class="number">★</span>
+          <h2>Hall of heroes</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Knight</th>
+                <th>Damage</th>
+                <th>Heals</th>
+                <th>Blocks</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="leaders"></tbody>
+          </table>
+        </div>
+      </section>
+      <p id="message" role="status" aria-live="polite">Ready when you are.</p>
+      <footer>
+        <span>CODEX × TWITCHCON HACKATHON</span
+        ><span id="mode">Local battle server</span>
+      </footer>
+    </main>
+  </body>
+</html>
