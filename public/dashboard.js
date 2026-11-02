@@ -192,8 +192,8 @@ async function initialize() {
     configured = true;
     $("#mock-panel").hidden = !mockMode;
     $("#mode").textContent = mockMode
-      ? "MOCK MODE · Twitch connection comes next"
-      : "Twitch integration is not connected yet";
+      ? "MOCK MODE · Local Twitch CLI events"
+      : "LIVE MODE · Twitch EventSub";
     if (!current || config.state.now >= current.now) render(config.state);
     controls();
   } catch (error) {

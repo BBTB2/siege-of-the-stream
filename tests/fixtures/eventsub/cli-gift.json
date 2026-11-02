@@ -1,0 +1,29 @@
+{
+  "subscription": {
+    "id": "c3584b3e-51fb-dfcc-7bae-9b513abb1b9f",
+    "status": "enabled",
+    "type": "channel.subscription.gift",
+    "version": "1",
+    "condition": {
+      "broadcaster_user_id": "100"
+    },
+    "transport": {
+      "method": "webhook",
+      "callback": "null"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "cost": 0
+  },
+  "event": {
+    "user_id": "200",
+    "user_login": "testFromUser",
+    "user_name": "testFromUser",
+    "broadcaster_user_id": "100",
+    "broadcaster_user_login": "testBroadcaster",
+    "broadcaster_user_name": "testBroadcaster",
+    "tier": "1000",
+    "total": 5,
+    "is_anonymous": false,
+    "cumulative_total": 36
+  }
+}

@@ -92,7 +92,7 @@ describe("joining and commands", () => {
     const dead = tick(triggerRage(join(round())), 4000);
     expect(join(dead).knights[0]?.hp).toBe(0);
     expect(act(dead, "!attack")).toEqual(dead);
-    expect(act(dead, "!heal")).toEqual(dead);
+    expect(act(dead, "!defend")).toEqual(dead);
   });
   it("heals the most injured living ally and credits actual HP restored", () => {
     const healed = act(injured(), "!heal");
@@ -102,11 +102,11 @@ describe("joining and commands", () => {
     expect(capped.knights[0]?.hp).toBe(100);
     expect(capped.knights[0]?.heals).toBe(10);
   });
-  it("healing never resurrects a knocked-out ally or overheals", () => {
+  it("healing revives a knocked-out ally and credits restored HP", () => {
     const dead = tick(triggerRage(join(round())), 4000);
     const s = act(join(dead, "bob"), "!heal", "bob");
-    expect(s.knights.map((k) => k.hp)).toEqual([0, 100]);
-    expect(s.knights[1]?.heals).toBe(0);
+    expect(s.knights.map((k) => k.hp)).toEqual([30, 100]);
+    expect(s.knights[1]?.heals).toBe(30);
   });
   it("unknown commands do not consume cooldown", () => {
     const s = join(round());
@@ -227,11 +227,11 @@ describe("boss phases and rage", () => {
     expect(phase2.rage).toBeNull();
     const phase3 = twitchEvent(phase2, { type: "cheer", bits: 1000 });
     expect(phase3.boss.phase).toBe(3);
-    expect(phase3.rage?.hitsAt).toBe(4000);
+    expect(phase3.rage?.hitsAt).toBe(2000);
   });
-  it("manual rage gives 4 seconds warning and knocks out only unprotected knights in the area", () => {
+  it("manual rage gives 2 seconds warning and knocks out only unprotected knights in the area", () => {
     const s = triggerRage(act(join(join(round()), "bob"), "!defend"));
-    expect(tick(s, 3900).knights.every((k) => k.hp === 100)).toBe(true);
+    expect(tick(s, 1900).knights.every((k) => k.hp === 100)).toBe(true);
     expect(
       tick(s, 4000).knights.map((k) => ({ hp: k.hp, blocks: k.blocks })),
     ).toEqual([
@@ -250,14 +250,14 @@ describe("boss phases and rage", () => {
   });
   it("defense expires at its exact deadline", () => {
     const defended = act(join(round()), "!defend");
-    const s = triggerRage(tick(defended, 1000));
-    expect(tick(s, 4000).knights[0]?.hp).toBe(0);
+    const s = triggerRage(tick(defended, 3000));
+    expect(tick(s, 2000).knights[0]?.hp).toBe(0);
   });
   it("cannot reset an active telegraph and repeats rage in phase three", () => {
     const s = twitchEvent(round(), { type: "cheer", bits: 2000 });
-    expect(triggerRage(tick(s, 1000)).rage?.hitsAt).toBe(4000);
-    expect(tick(s, 11900).rage).toBeNull();
-    expect(tick(s, 12000).rage?.hitsAt).toBe(16000);
+    expect(triggerRage(tick(s, 1000)).rage?.hitsAt).toBe(2000);
+    expect(tick(s, 9900).rage).toBeNull();
+    expect(tick(s, 10000).rage?.hitsAt).toBe(12000);
     expect(triggerRage(createGame()).rage).toBeNull();
   });
   it("normal boss strikes scale with phase without reducing HP below zero", () => {

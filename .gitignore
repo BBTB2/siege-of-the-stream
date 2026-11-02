@@ -1,5 +1,23 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
+.tokens.json
+.tokens.json.*
+# Local runtime data, event captures, databases, and logs (keep test fixtures).
+data/
+captures/
+logs/
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 coverage/
 .DS_Store
+
+# Local demo recordings
+footage/

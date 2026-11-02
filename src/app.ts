@@ -21,6 +21,9 @@ import {
   InputError,
   roundOptions,
 } from "./validation.js";
+import { TwitchService, type TwitchConfig } from "./twitch/service.js";
+import type { GameInput } from "./twitch/mapping.js";
+import { createDemo, tickDemo, type DemoState } from "./demo.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const allowedHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -36,11 +39,47 @@ function trustedOrigin(origin: string | undefined, host: string | undefined) {
 }
 
 /** The sole I/O owner. Engine state is replaced, never edited in place. */
-export function createBattleServer({ mockMode }: { mockMode: boolean }) {
+export function createBattleServer({
+  mockMode,
+  twitch: twitchConfig,
+  log,
+}: {
+  mockMode: boolean;
+  twitch?: TwitchConfig;
+  log?: (line: string) => void;
+}) {
   const app = express();
   const server = createServer(app);
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
+  const demos = new Map<WebSocket, DemoState>();
   let state = createGame();
+  function dispatch(input: GameInput): string {
+    const before = state;
+    state =
+      input.kind === "command"
+        ? command(
+            state,
+            input.userId,
+            input.username,
+            input.action,
+            input.color,
+          )
+        : twitchEvent(state, input.event);
+    if (before === state)
+      return `ignored:${before.status !== "playing" ? "round_inactive" : "cooldown_unjoined_or_knocked_out"}`;
+    const damage = before.boss.hp - state.boss.hp;
+    const spawned = state.knights.length - before.knights.length;
+    const heals =
+      state.knights.reduce((sum, k) => sum + k.heals, 0) -
+      before.knights.reduce((sum, k) => sum + k.heals, 0);
+    return `${input.kind === "command" ? input.action : input.event.type} damage=${damage} spawn=${spawned} heal=${heals} shield=${Math.max(0, state.shieldUntil - state.now)}ms phase=${state.boss.phase}`;
+  }
+  const twitch = new TwitchService({
+    ...twitchConfig,
+    mockMode,
+    dispatch,
+    log,
+  });
   app.disable("x-powered-by");
   app.use((req, res, next) => {
     if (!trustedHost(req.headers.host)) {
@@ -63,7 +102,7 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
         ? { until: now + 60_000, count: 1 }
         : { ...budget, count: budget.count + 1 };
     res.setHeader("Cache-Control", "no-store");
-    if (budget.count > 600) {
+    if (budget.count > 1200) {
       res.status(429).json({ error: "Too many requests; retry in a minute." });
       return;
     }
@@ -81,6 +120,11 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
   app.get("/api/state", (_req, res) =>
     res.json({ state, bosses: BOSSES, mockMode }),
   );
+  app.get("/api/twitch", (_req, res) => res.json(twitch.getStatus()));
+  app.post("/api/twitch/connect", (_req, res) => {
+    twitch.start();
+    res.status(202).json(twitch.getStatus());
+  });
   app.post("/api/start", (req, res) => {
     const options = roundOptions(req.body);
     if (state.status !== "idle") {
@@ -109,11 +153,20 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
   });
   app.post("/api/mock/command", (req, res) => {
     const input = chatInput(req.body);
-    state = command(state, input.userId, input.username, input.action);
+    const effect = dispatch({ kind: "command", ...input });
+    log?.(JSON.stringify({ twitch: "mock.chat", effect }));
     res.json({ state });
   });
   app.post("/api/mock/event", (req, res) => {
-    state = twitchEvent(state, eventInput(req.body));
+    const event = eventInput(req.body);
+    const effect = dispatch({ kind: "event", event });
+    log?.(JSON.stringify({ twitch: `mock.${event.type}`, effect }));
+    res.json({ state });
+  });
+  app.post("/api/mock/notification", (req, res) => {
+    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body))
+      throw new InputError("Expected an EventSub envelope.");
+    twitch.handleNotification(req.body);
     res.json({ state });
   });
   app.get("/", (_req, res) => res.redirect("/dashboard"));
@@ -143,7 +196,7 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
 
   server.on("upgrade", (req, socket, head) => {
     if (
-      req.url !== "/ws" ||
+      (req.url !== "/ws" && req.url !== "/ws?demo=1") ||
       !trustedHost(req.headers.host) ||
       !trustedOrigin(req.headers.origin, req.headers.host) ||
       sockets.clients.size >= 32
@@ -152,15 +205,19 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
       return;
     }
     sockets.handleUpgrade(req, socket, head, (client) =>
-      sockets.emit("connection", client),
+      sockets.emit("connection", client, req),
     );
   });
-  sockets.on("connection", (client) => {
+  sockets.on("connection", (client, req) => {
+    if (req.url === "/ws?demo=1") demos.set(client, createDemo());
+    client.on("close", () => demos.delete(client));
     client.on("error", () => client.terminate());
     client.on("message", () =>
       client.close(1008, "State stream is read-only."),
     );
-    client.send(JSON.stringify({ type: "state", state }));
+    client.send(
+      JSON.stringify({ type: "state", state: demos.get(client) ?? state }),
+    );
   });
   let previous = performance.now();
   let remainder = 0;
@@ -174,11 +231,19 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
     const payload = JSON.stringify({ type: "state", state });
     for (const client of sockets.clients) {
       if (client.bufferedAmount > 1_000_000) client.terminate();
-      else if (client.readyState === WebSocket.OPEN) client.send(payload);
+      else if (client.readyState === WebSocket.OPEN) {
+        const demo = demos.get(client);
+        if (demo) {
+          const advanced = elapsed ? tickDemo(demo, elapsed) : demo;
+          demos.set(client, advanced);
+          client.send(JSON.stringify({ type: "state", state: advanced }));
+        } else client.send(payload);
+      }
     }
   }, RULES.tickMs);
   interval.unref();
   async function close() {
+    twitch.stop();
     clearInterval(interval);
     for (const client of sockets.clients) client.terminate();
     await new Promise<void>((resolve) => sockets.close(() => resolve()));
@@ -191,5 +256,5 @@ export function createBattleServer({ mockMode }: { mockMode: boolean }) {
       ),
     );
   }
-  return { server, close };
+  return { server, close, startTwitch: () => twitch.start() };
 }

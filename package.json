@@ -11,9 +11,11 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "mock:chat": "node scripts/mock-chat.mjs",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write src tests public package.json tsconfig.json vitest.config.ts"
+    "lint": "prettier --check src tests public scripts package.json tsconfig.json vitest.config.ts && node scripts/check-syntax.mjs",
+    "format": "prettier --write src tests public scripts package.json tsconfig.json vitest.config.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

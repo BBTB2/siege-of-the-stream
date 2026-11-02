@@ -1,4 +1,10 @@
-import { RULES, type GameState, type Knight } from "./model.js";
+import {
+  RULES,
+  chatColor,
+  type BattleEffect,
+  type GameState,
+  type Knight,
+} from "./model.js";
 
 export function updateKnight(
   state: GameState,
@@ -18,6 +24,7 @@ export function spawn(
   id: string,
   username: string,
   kind: Knight["kind"],
+  color?: string,
 ): GameState {
   const index = state.knights.length;
   const maxHp = kind === "champion" ? 200 : 100;
@@ -29,6 +36,7 @@ export function spawn(
         id,
         username: username.slice(0, 25),
         kind,
+        ...(chatColor(color) ? { color } : {}),
         hp: maxHp,
         maxHp,
         damage: 0,
@@ -43,7 +51,15 @@ export function spawn(
   };
 }
 
-export function effect(state: GameState, type: string, amount = 0): GameState {
+export function effect(
+  state: GameState,
+  type: string,
+  amount = 0,
+  metadata: Pick<
+    BattleEffect,
+    "username" | "bits" | "sourceId" | "targetId"
+  > = {},
+): GameState {
   const sequence = state.sequence + 1;
   return {
     ...state,
@@ -54,6 +70,8 @@ export function effect(state: GameState, type: string, amount = 0): GameState {
         id: sequence,
         type,
         amount,
+        ...metadata,
+        createdAt: state.now,
         until: state.now + 1500,
       },
     ].slice(-20),

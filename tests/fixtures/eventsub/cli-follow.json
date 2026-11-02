@@ -1,0 +1,27 @@
+{
+  "subscription": {
+    "id": "9b4ebff2-d7b9-2caf-6b41-989498d272b9",
+    "status": "enabled",
+    "type": "channel.follow",
+    "version": "2",
+    "condition": {
+      "broadcaster_user_id": "100",
+      "moderator_user_id": "200"
+    },
+    "transport": {
+      "method": "webhook",
+      "callback": "null"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "cost": 0
+  },
+  "event": {
+    "user_id": "200",
+    "user_login": "testFromUser",
+    "user_name": "testFromUser",
+    "broadcaster_user_id": "100",
+    "broadcaster_user_login": "testBroadcaster",
+    "broadcaster_user_name": "testBroadcaster",
+    "followed_at": "2026-01-01T00:00:00Z"
+  }
+}

@@ -7,7 +7,15 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
 const mode = process.env.MOCK_MODE ?? "true";
 if (mode !== "true" && mode !== "false")
   throw new Error("MOCK_MODE must be true or false.");
-const battle = createBattleServer({ mockMode: mode === "true" });
+const battle = createBattleServer({
+  mockMode: mode === "true",
+  twitch: {
+    clientId: process.env.TWITCH_CLIENT_ID,
+    broadcasterLogin: process.env.TWITCH_BROADCASTER_LOGIN,
+    mockBroadcasterId: process.env.TWITCH_MOCK_BROADCASTER_ID ?? "1234",
+  },
+  log: (line) => process.stdout.write(`${line}\n`),
+});
 battle.server.on("error", (error) => {
   console.error("Cannot start Siege of the Stream:", error.message);
   void battle.close().finally(() => {
@@ -18,6 +26,7 @@ battle.server.listen(port, "127.0.0.1", () => {
   process.stdout.write(
     `Siege of the Stream: http://localhost:${port}/dashboard\nOBS browser source: http://localhost:${port}/overlay (1920×1080)\n`,
   );
+  battle.startTwitch();
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

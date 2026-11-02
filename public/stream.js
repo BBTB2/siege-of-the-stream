@@ -5,10 +5,15 @@ export function connectState(onState, onStatus) {
   let receivedAt = 0;
   let stopped = false;
   let reconnect;
+  const query =
+    new URLSearchParams(location.search).get("demo") === "1" &&
+    location.pathname === "/overlay"
+      ? "?demo=1"
+      : "";
   function connect() {
     onStatus("Connecting");
     socket = new WebSocket(
-      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws${query}`,
     );
     socket.onmessage = ({ data }) => {
       try {

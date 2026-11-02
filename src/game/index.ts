@@ -3,6 +3,7 @@ import {
   BOSSES,
   RULES,
   createGame,
+  chatColor,
   type BossId,
   type ChatCommand,
   type GameState,
@@ -51,9 +52,13 @@ export function startRound(
 }
 
 function heal(state: GameState, healerId: string): GameState {
-  const target = state.knights
-    .filter((knight) => knight.hp > 0 && knight.hp < knight.maxHp)
-    .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+  const healer = state.knights.find((knight) => knight.id === healerId);
+  const target =
+    healer?.hp === 0
+      ? healer
+      : state.knights
+          .filter((knight) => knight.hp < knight.maxHp)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
   if (!target) return state;
   const amount = Math.min(RULES.healAmount, target.maxHp - target.hp);
   const healed = updateKnight(state, target.id, (knight) => ({
@@ -64,7 +69,10 @@ function heal(state: GameState, healerId: string): GameState {
     ...knight,
     heals: knight.heals + amount,
   }));
-  return effect(credited, "heal", amount);
+  return effect(credited, "heal", amount, {
+    sourceId: healerId,
+    targetId: target.id,
+  });
 }
 
 export function command(
@@ -72,17 +80,30 @@ export function command(
   userId: string,
   username: string,
   action: ChatCommand,
+  color?: string,
 ): GameState {
   if (state.status !== "playing" || !userId.trim() || !username.trim())
     return state;
   const id = `viewer:${userId}`;
   const knight = state.knights.find((knight) => knight.id === id);
+  const validColor = chatColor(color);
+  const colored =
+    knight && validColor && validColor !== knight.color
+      ? updateKnight(state, id, (current) => ({
+          ...current,
+          color: validColor,
+        }))
+      : state;
   if (action === "!join")
-    return knight ? state : spawn(state, id, username, "viewer");
-  if (!knight || knight.hp <= 0 || state.now < knight.nextActionAt)
+    return knight ? colored : spawn(state, id, username, "viewer", validColor);
+  if (
+    !knight ||
+    (knight.hp <= 0 && action !== "!heal") ||
+    state.now < knight.nextActionAt
+  )
     return state;
   if (!["!attack", "!defend", "!heal"].includes(action)) return state;
-  const ready = updateKnight(state, id, (knight) => ({
+  const ready = updateKnight(colored, id, (knight) => ({
     ...knight,
     nextActionAt: state.now + RULES.cooldownMs,
   }));
@@ -114,28 +135,38 @@ function summon(
 
 export function twitchEvent(state: GameState, event: TwitchEvent): GameState {
   if (state.status !== "playing") return state;
-  if ("username" in event && !event.username.trim()) return state;
+  if (
+    "username" in event &&
+    event.username !== undefined &&
+    !event.username.trim()
+  )
+    return state;
   switch (event.type) {
     case "follow":
-      return effect(
+      return eventEffect(
         { ...state, shieldUntil: state.now + RULES.shieldMs },
+        event,
         "shield",
+        0,
       );
     case "subscription":
     case "gift":
-      return effect(
+      return eventEffect(
         summon(state, `${event.username}'s champion`, "champion"),
+        event,
         "champion",
+        1,
       );
     case "cheer": {
       if (!Number.isSafeInteger(event.bits) || event.bits <= 0) return state;
       const amount = Math.min(event.bits, state.boss.hp);
-      return effect(
+      return eventEffect(
         damage(
           state,
           amount,
           event.userId ? `viewer:${event.userId}` : undefined,
         ),
+        event,
         "fireball",
         amount,
       );
@@ -149,9 +180,34 @@ export function twitchEvent(state: GameState, event: TwitchEvent): GameState {
           summon(current, `${event.username} #${index + 1}`, "reinforcement"),
         state,
       );
-      return effect(reinforced, "raid", count);
+      return eventEffect(reinforced, event, "raid", count);
     }
     default:
       return state;
   }
+}
+
+function eventEffect(
+  state: GameState,
+  event: TwitchEvent,
+  type: string,
+  amount: number,
+): GameState {
+  const username = event.username ?? "Anonymous";
+  const next = effect(state, type, amount, {
+    username,
+    ...(event.type === "cheer" ? { bits: event.bits } : {}),
+  });
+  return {
+    ...next,
+    events: [
+      ...state.events,
+      {
+        id: next.sequence,
+        type: event.type,
+        username,
+        amount: event.type === "cheer" ? event.bits : amount,
+      },
+    ].slice(-4),
+  };
 }

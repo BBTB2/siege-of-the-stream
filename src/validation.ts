@@ -1,5 +1,6 @@
 import {
   BOSSES,
+  chatColor,
   type BossId,
   type ChatCommand,
   type TwitchEvent,
@@ -59,13 +60,19 @@ export function chatInput(body: unknown) {
     userId: text(data.userId, "user ID"),
     username: text(data.username, "username", 25),
     action: data.action as ChatCommand,
+    ...(chatColor(data.color) ? { color: chatColor(data.color) } : {}),
   };
 }
 export function eventInput(body: unknown): TwitchEvent {
   const data = object(body);
   switch (data.type) {
     case "follow":
-      return { type: "follow" };
+      return {
+        type: "follow",
+        ...(data.username === undefined
+          ? {}
+          : { username: text(data.username, "username", 25) }),
+      };
     case "subscription":
     case "gift":
       return { type: data.type, username: text(data.username, "username", 25) };
@@ -79,6 +86,9 @@ export function eventInput(body: unknown): TwitchEvent {
       return {
         type: "cheer",
         bits: integer(data.bits, "bits", 1, Number.MAX_SAFE_INTEGER),
+        ...(data.username === undefined
+          ? {}
+          : { username: text(data.username, "username", 25) }),
         ...(data.userId === undefined
           ? {}
           : { userId: text(data.userId, "user ID") }),

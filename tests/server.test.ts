@@ -24,6 +24,49 @@ afterEach(async () => {
 });
 
 describe("HTTP and WebSocket battle boundary", () => {
+  it("feeds mock EventSub chat through the adapter, deduplicates events and exposes token-free status", async () => {
+    const { base, post } = await launch();
+    await post("/api/start", { boss: "iron-colossus", durationMs: 60_000 });
+    const notification = (id: string, command: string) => ({
+      metadata: {
+        message_type: "notification",
+        message_id: id,
+        subscription_type: "channel.chat.message",
+        subscription_version: "1",
+      },
+      payload: {
+        subscription: { type: "channel.chat.message", version: "1" },
+        event: {
+          broadcaster_user_id: "1234",
+          chatter_user_id: "99",
+          chatter_user_name: "Knight",
+          message: { text: command },
+        },
+      },
+    });
+    const joined = await post(
+      "/api/mock/notification",
+      notification("joined", "!join"),
+    );
+    expect(joined.status).toBe(200);
+    expect((await joined.json()).state.knights).toHaveLength(1);
+    const attacked = await post(
+      "/api/mock/notification",
+      notification("attack", "!attack"),
+    );
+    expect((await attacked.json()).state.boss.hp).toBe(2975);
+    await new Promise((resolve) => setTimeout(resolve, 3100));
+    const replay = await post(
+      "/api/mock/notification",
+      notification("attack", "!attack"),
+    );
+    expect((await replay.json()).state.boss.hp).toBe(2975);
+    const status = await (await fetch(`${base}/api/twitch`)).json();
+    expect(status).toMatchObject({ mode: "mock", phase: "idle" });
+    expect(JSON.stringify(status)).not.toMatch(
+      /access_token|refresh_token|device_code/,
+    );
+  });
   it("starts a chosen boss, applies mock chat, pushes state and stops into results", async () => {
     const { base, post } = await launch();
     const socket = new WebSocket(base.replace("http", "ws") + "/ws");
